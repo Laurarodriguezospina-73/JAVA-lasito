@@ -1,0 +1,262 @@
+package com.mycompany.connectfour;
+
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.WindowConstants;
+import javax.swing.Timer;
+import java.awt.Dimension;
+import java.awt.Color;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+
+public class ConnectFour {
+    private final JFrame ventana;
+
+    public ConnectFour(String nombreJ1, String nombreJ2) {
+        ventana = new JFrame("Conecta 4");
+        ventana.setSize(800, 700);
+        ventana.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        ventana.setResizable(false);
+        ventana.add(new MultiDraw(nombreJ1, nombreJ2));
+        ventana.setLocationRelativeTo(null);
+        ventana.setVisible(true);
+    }
+
+    public static void main(String[] args) {
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            new ConnectFour("Jugador 1", "Jugador 2");
+        });
+    }
+
+    public class MultiDraw extends JPanel implements MouseListener {
+        private static final long serialVersionUID = 1L;
+
+        private final String nombreJ1;
+        private final String nombreJ2;
+
+        private final int rows = 6;
+        private final int cols = 7;
+        private final int cellSize = 80;
+        private int turn = 1;
+        private int player1Score = 0;
+        private int player2Score = 0;
+
+        private Color[][] grid;
+
+        private Timer animationTimer;
+        private boolean animating = false;
+        private int animatingCol = -1;
+        private int animatingRow = -1;
+        private int currentY = 0;
+        private int targetY = 0;
+        private Color animatingColor;
+
+        private Timer relojTimer;
+        private int segundos = 0;
+        private int minutos = 0;
+
+        private final int boardX;
+        private final int boardY = 120;
+
+        public MultiDraw(String nombreJ1, String nombreJ2) {
+            this.nombreJ1 = nombreJ1;
+            this.nombreJ2 = nombreJ2;
+
+            setPreferredSize(new Dimension(800, 700));
+            addMouseListener(this);
+
+            grid = new Color[rows][cols];
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < cols; col++) {
+                    grid[row][col] = Color.WHITE;
+                }
+            }
+
+            boardX = (800 - (cols * cellSize)) / 2;
+
+            animationTimer = new Timer(15, (ActionEvent e) -> {
+                if (animating) {
+                    currentY += 12;
+
+                    if (currentY >= targetY) {
+                        animationTimer.stop();
+                        animating = false;
+                        grid[animatingRow][animatingCol] = animatingColor;
+
+                        // ✅ CAMBIO: abrir Resultados en lugar de JOptionPane
+                        if (checkWin(animatingRow, animatingCol)) {
+                            if (turn == 1) {
+                                player1Score++;
+                                relojTimer.stop();
+                                ventana.dispose();
+                                new Resultados(nombreJ1).setVisible(true);
+                            } else {
+                                player2Score++;
+                                relojTimer.stop();
+                                ventana.dispose();
+                                new Resultados(nombreJ2).setVisible(true);
+                            }
+                        } else if (isBoardFull()) {
+                            // Empate: reinicia la ronda
+                            relojTimer.stop();
+                            javax.swing.JOptionPane.showMessageDialog(
+                                MultiDraw.this, "¡Empate!");
+                            resetRound();
+                            relojTimer.start();
+                        } else {
+                            turn = (turn == 1) ? 2 : 1;
+                        }
+                        repaint();
+                    }
+                    repaint();
+                }
+            });
+
+            relojTimer = new Timer(1000, e -> {
+                segundos++;
+                if (segundos == 60) {
+                    segundos = 0;
+                    minutos++;
+                }
+                repaint();
+            });
+            relojTimer.start();
+        }
+
+        private String getTiempo() {
+            return String.format("%02d:%02d", minutos, segundos);
+        }
+
+        private int findEmptyRow(int col) {
+            for (int row = rows - 1; row >= 0; row--) {
+                if (grid[row][col] == Color.WHITE) return row;
+            }
+            return -1;
+        }
+
+        private boolean isBoardFull() {
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < cols; col++) {
+                    if (grid[row][col] == Color.WHITE) return false;
+                }
+            }
+            return true;
+        }
+
+        private void resetRound() {
+            minutos = 0;
+            segundos = 0;
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < cols; col++) {
+                    grid[row][col] = Color.WHITE;
+                }
+            }
+            turn = (turn == 1) ? 2 : 1;
+            repaint();
+        }
+
+        private boolean checkWin(int row, int col) {
+            Color currentColor = grid[row][col];
+            if (currentColor == Color.WHITE) return false;
+
+            int[][] directions = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+            for (int[] d : directions) {
+                int count = 1;
+                for (int i = 1; i < 4; i++) {
+                    int r = row + d[0] * i, c = col + d[1] * i;
+                    if (r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] == currentColor) count++;
+                    else break;
+                }
+                for (int i = 1; i < 4; i++) {
+                    int r = row - d[0] * i, c = col - d[1] * i;
+                    if (r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c] == currentColor) count++;
+                    else break;
+                }
+                if (count >= 4) return true;
+            }
+            return false;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+
+            g2.setColor(new Color(30, 30, 40));
+            g2.fillRect(0, 0, getWidth(), getHeight());
+
+            g2.setFont(new Font("Arial", Font.BOLD, 24));
+            g2.setColor(new Color(255, 215, 0));
+            g2.drawString("CONECTA 4", 320, 40);
+
+            g2.setFont(new Font("Monospaced", Font.BOLD, 18));
+            g2.setColor(Color.CYAN);
+            g2.drawString("⏱ " + getTiempo(), 650, 45);
+
+            g2.setFont(new Font("SansSerif", Font.BOLD, 18));
+            g2.setColor(Color.RED);
+            g2.drawString(nombreJ1 + ": " + player1Score, 80, 85);
+            g2.setColor(Color.YELLOW);
+            g2.drawString(nombreJ2 + ": " + player2Score, 430, 85);
+
+            g2.setFont(new Font("Arial", Font.BOLD, 14));
+            if (turn == 1) {
+                g2.setColor(Color.RED);
+                g2.drawString("Turno: " + nombreJ1, 330, 115);
+            } else {
+                g2.setColor(Color.YELLOW);
+                g2.drawString("Turno: " + nombreJ2, 330, 115);
+            }
+
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < cols; col++) {
+                    int x = boardX + (col * cellSize);
+                    int y = boardY + (row * cellSize);
+                    g2.setColor(new Color(0, 80, 150));
+                    g2.fillOval(x + 2, y + 2, cellSize - 4, cellSize - 4);
+
+                    if (grid[row][col] != Color.WHITE) {
+                        g2.setColor(grid[row][col]);
+                        g2.fillOval(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                    }
+                }
+            }
+
+            if (animating) {
+                int x = boardX + (animatingCol * cellSize);
+                int y = boardY + currentY;
+                g2.setColor(animatingColor);
+                g2.fillOval(x + 2, y + 2, cellSize - 4, cellSize - 4);
+            }
+        }
+
+        @Override
+        public void mousePressed(MouseEvent e) {
+            int x = e.getX();
+            if (x >= boardX && x <= boardX + (cols * cellSize) && !animating) {
+                int columna = (x - boardX) / cellSize;
+                if (columna >= 0 && columna < cols) {
+                    int filaDestino = findEmptyRow(columna);
+                    if (filaDestino != -1) {
+                        animating = true;
+                        animatingCol = columna;
+                        animatingRow = filaDestino;
+                        currentY = 0;
+                        targetY = filaDestino * cellSize;
+                        animatingColor = (turn == 1) ? Color.RED : Color.YELLOW;
+                        animationTimer.start();
+                    }
+                }
+            }
+        }
+
+        @Override public void mouseClicked(MouseEvent e) {}
+        @Override public void mouseReleased(MouseEvent e) {}
+        @Override public void mouseEntered(MouseEvent e) {}
+        @Override public void mouseExited(MouseEvent e) {}
+    }
+}
